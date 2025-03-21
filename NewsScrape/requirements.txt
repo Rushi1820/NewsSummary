@@ -1,0 +1,7 @@
+bs4
+transformers
+sentence_transformers
+gtts
+googletrans==4.0.0-rc1
+fastapi
+uvicorn
