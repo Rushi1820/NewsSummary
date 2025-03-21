@@ -15,6 +15,8 @@ text_model=pipeline("text-generation",model="gpt2")
 sentiment_pipeline= pipeline("sentiment-analysis")
 embedding_model= SentenceTransformer("all-MiniLM-L6-v2")
 impact_model=pipeline("text-generation",model="EleutherAI/gpt-neo-1.3B")
+summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
+
 
 def extract_topics(description):
     logger.info("Topics extraction started")
@@ -45,13 +47,19 @@ def analyze_impact(desc1,desc2):
 
           Impact:""")
 
-    generator= impact_model
 
     try:
-        impact_response= generator(prompt,max_new_token=100,truncation=True)[0]["generated_text"].split("Impacct:")[1].strip()
-        impact_response = impact_response.replace(prompt.split("Impact:")[0].strip(), "").strip()
-        impact_response = impact_response.replace("\n", " ").strip()
+        response = impact_model(prompt, max_new_tokens=100, truncation=True)[0]["generated_text"]
         
+        impact_response = response.split("Impact:")[-1].strip()
+
+        impact_response = re.sub(r"\*\*.*?\*\*", "", impact_response).strip()  
+        impact_response = re.sub(r"\s+", " ", impact_response)  
+
+        # Ensure structured response
+        if len(impact_response.split(".")) > 1:  
+            impact_response = impact_response.split(".")[0] + "."  
+
         return impact_response
     except Exception as e:
         return f"Impact is Unavailable{e}"
@@ -70,7 +78,7 @@ def extract_details_from_website(company_name):
     articles = soup.find_all("div",class_="clr flt topicstry story_list")
     news_data=[]
 
-    for article in articles[:2]:
+    for article in articles[:3]:
         title_element=article.find("h2").find("a")
         if title_element:
             title=title_element.get_text(strip=True)
@@ -96,7 +104,7 @@ def extract_details_from_website(company_name):
 
         sentiment_analysis(news_data)
         logger.info("All Articles extracted and stored")
-        return news_data
+    return news_data
 
 def compare_articles(articles):
     logger.info("articles comparision started")
@@ -108,7 +116,7 @@ def compare_articles(articles):
     embeddings= embedding_model.encode([article["description"] for article in articles], convert_to_tensor=True)
     topics_overlap=[]
     for i in range(len(articles)):
-        for k in range(i+1,len(articles)):
+        for j in range(i+1,len(articles)):
             desc1= articles[i]["description"]
             desc2= articles[j]["description"]
 
@@ -121,7 +129,7 @@ def compare_articles(articles):
             impact= analyze_impact(desc1,desc2)
 
             coverage_differences.append({
-                "Comparison": f"similarity score between articles:{similarity}",
+                "Comparison": f"similarity score between articles:{cos_similarity}",
                 "Impact": impact
             })
 
@@ -165,12 +173,26 @@ def convert_to_hindi_audio(text):
 
 def merge_results(company):
     news_articles=extract_details_from_website(company)
+    print(news_articles)
     comparison_articles=compare_articles(news_articles)
-    hindiaudio= convert_to_hindi_audio(comparison_articles)
+    print(comparison_articles)
     return {
         "Company": company,
         "Articles": news_articles,
-        "Coverage Differences": comparison_articles,
-        }
+        "Coverage Differences": comparison_articles
+                }
     
 
+
+
+def summarize_news(news_data):
+    text = f"we are talking about news of {news_data['Company']} company "
+    
+    for article in news_data["Articles"]:
+        text += f"{article['title']}: {article['description']} "
+    
+    text += f"Overall Sentiment: {news_data['Coverage Differences']['Final Sentiment Analysis']}."
+    
+    summary = summarizer(text,max_new_tokens=150, truncation=True, do_sample=False)[0]['summary_text']
+    
+    return summary
