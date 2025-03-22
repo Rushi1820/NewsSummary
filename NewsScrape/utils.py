@@ -8,6 +8,7 @@ from googletrans import Translator
 from fastapi.responses import StreamingResponse
 from logging_config import logger
 import base64
+import re
 
 logger.info(f"loading all models")
 

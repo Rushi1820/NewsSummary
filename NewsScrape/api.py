@@ -12,5 +12,5 @@ async def getcompanynews(company:str):
     summary=utils.summarize_news(results)
     hindi_audio_base64 = utils.convert_to_hindi_audio(summary)
     
-    results["Audio"] = hindi_audio_base64  # Add Base64 audio
+    results["Audio"] = hindi_audio_base64 
     return results
